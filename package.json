@@ -1,0 +1,25 @@
+{
+  "name": "mvs-sync",
+  "version": "1.0.1",
+  "description": "Modules for synchronizing with mvs synchronization server",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/tmaxmvs/mvs-sync.git"
+  },
+  "keywords": [],
+  "author": "hyunseok_choi <goldboy122@gmail.com>",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/tmaxmvs/mvs-sync/issues"
+  },
+  "homepage": "https://github.com/tmaxmvs/mvs-sync#readme",
+  "devDependencies": {
+    "@types/node": "^18.15.5",
+    "typescript": "^5.0.2"
+  }
+}
