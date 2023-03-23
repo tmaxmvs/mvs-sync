@@ -18,7 +18,8 @@
     "strictNullChecks": false,
     "declaration": true,
     "outDir": "./dist",
-    "types": ["node"]
+    "types": ["node", "jest"]
   },
-  "include": ["lib"]
+  "include": ["lib"],
+  "exclude": ["__test__"]
 }
