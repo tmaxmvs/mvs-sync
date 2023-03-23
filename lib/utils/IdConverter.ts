@@ -1,11 +1,11 @@
 import * as ConverterInterface from "../interfaces/AttrInterfaces";
 
 export class Converter {
-  ConvertObjectIdToPrefabID(objectID: number) {
+  convertObjectIdToPrefabID(objectID: number) {
     return objectID & 0xffff0000;
   }
 
-  ConvertObjectIdToInstanceID(objectID: number) {
+  convertObjectIdToInstanceID(objectID: number) {
     return objectID & 0x0000ffff;
   }
 
