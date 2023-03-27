@@ -6,9 +6,16 @@ interface SyncType {
   attributes: { [key: number]: number };
 }
 
+interface objType {
+  objID: number;
+  [key: string]: any;
+}
+
 export class SyncManager extends MessageWriter {
   #connectionID: number;
   socket: WebSocket;
+
+  #objectList: Map<number, object> = new Map();
 
   onCreateRoom: (roomNumber: string) => any;
   onJoinRoom: (sceneID: number) => any;
@@ -260,6 +267,10 @@ export class SyncManager extends MessageWriter {
     return offset;
   }
 
+  /**
+   *
+   * @returns number : your connection ID
+   */
   getConnectionID() {
     return this.#connectionID;
   }
@@ -346,6 +357,40 @@ export class SyncManager extends MessageWriter {
   reqRoomListInfo() {
     this.setMessageBodyZero();
     this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
+  }
+
+  /**
+   *
+   * @param arr 당신이 동기화하고 싶은 object들의 배열 (prefabID(=objID) 및 속성들)
+   */
+  syncObject(arr: objType[]) {
+    for (const iterator of arr) {
+      this.#objectList.set(iterator.objID, iterator);
+    }
+  }
+
+  /**
+   *
+   * @returns 동기화 하려고 하는 object에 관한 map 반환
+   */
+  getObjectList() {
+    return this.#objectList;
+  }
+
+  /**
+   *
+   * @param 혹시라도 동기화에 추가하고 싶은 오브젝트가 생길 수도 있기 떄문에..
+   */
+  setObject(obj: objType) {
+    this.#objectList.set(obj.objID, obj);
+  }
+
+  /**
+   *
+   * @param objID Map에서 동기화를 빼고 싶은 object
+   */
+  deleteObject(objID: number) {
+    this.#objectList.delete(objID);
   }
 
   /**
