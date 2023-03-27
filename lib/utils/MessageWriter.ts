@@ -1,5 +1,5 @@
 import * as protocol from "../interfaces/Dictionary";
-
+import msgpack from "msgpack-lite";
 /*
 
 (bytes)
@@ -14,6 +14,8 @@ batchHeader 0 - 3
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------...
 | batchHeader   | messageID     | messageLen    | messageBody ~ (repeat...)            | messageID     | messageLen    | messageBody ~                         | messageID     | messageLen    | messageBody ~                         |...
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------...
+
+
 
 */
 
@@ -30,6 +32,10 @@ export class MessageWriter {
 
   #messageHeader: Buffer;
   #messageBody: Buffer;
+
+  // batchBody에 들어갈 하나의 메시지
+  #message: Buffer;
+  #messageStack: ArrayBuffer;
 
   // getter
   #getBatchBodyLength() {
@@ -246,5 +252,47 @@ export class MessageWriter {
 
     this.#batch = Buffer.concat([this.#batchHeader, this.#batchBody]);
     return this.#batch;
+  }
+
+  #setMessage() {
+    this.#message = Buffer.concat([this.#messageHeader, this.#messageBody]);
+    return this;
+  }
+
+  setMessage(_msgID: number) {
+    this.#setMessageID(_msgID);
+    this.#setMessageLen();
+    this.#setMessageHeader();
+    this.#setMessage();
+  }
+  // this.#messageStack = Buffer.concat([this.#messageStack, this.#message]);
+  testing() {
+    const newbuffer = msgpack.encode({
+      transform: {
+        scale: {
+          // 1
+          x: -26.649295030454404,
+          y: -26.649295030454404,
+          z: -26.649295030454404,
+        },
+        position: {
+          // 2
+          x: -26.649295030454404, // 0000 1010 0000 0000 0000 0000 0000 1101
+          y: -26.649295030454404,
+          z: -30.348903732394767,
+        },
+        rotation: {
+          // 3
+          x: -26.649295030454404,
+          y: -26.649295030454404,
+          z: -26.649295030454404,
+        },
+      },
+    });
+    const a = Buffer.alloc(newbuffer.length);
+    a.fill(newbuffer);
+    console.log(a);
+    console.log(msgpack.decode(a));
+    return newbuffer;
   }
 }
