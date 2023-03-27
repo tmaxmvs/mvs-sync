@@ -1,5 +1,4 @@
 import * as protocol from "../interfaces/Dictionary";
-import msgpack from "msgpack-lite";
 /*
 
 (bytes)
@@ -266,33 +265,33 @@ export class MessageWriter {
     this.#setMessage();
   }
   // this.#messageStack = Buffer.concat([this.#messageStack, this.#message]);
-  testing() {
-    const newbuffer = msgpack.encode({
-      transform: {
-        scale: {
-          // 1
-          x: -26.649295030454404,
-          y: -26.649295030454404,
-          z: -26.649295030454404,
-        },
-        position: {
-          // 2
-          x: -26.649295030454404, // 0000 1010 0000 0000 0000 0000 0000 1101
-          y: -26.649295030454404,
-          z: -30.348903732394767,
-        },
-        rotation: {
-          // 3
-          x: -26.649295030454404,
-          y: -26.649295030454404,
-          z: -26.649295030454404,
-        },
-      },
-    });
-    const a = Buffer.alloc(newbuffer.length);
-    a.fill(newbuffer);
-    console.log(a);
-    console.log(msgpack.decode(a));
-    return newbuffer;
-  }
+  // testing() {
+  //   const newbuffer = msgpack.encode({
+  //     transform: {
+  //       scale: {
+  //         // 1
+  //         x: -26.649295030454404,
+  //         y: -26.649295030454404,
+  //         z: -26.649295030454404,
+  //       },
+  //       position: {
+  //         // 2
+  //         x: -26.649295030454404, // 0000 1010 0000 0000 0000 0000 0000 1101
+  //         y: -26.649295030454404,
+  //         z: -30.348903732394767,
+  //       },
+  //       rotation: {
+  //         // 3
+  //         x: -26.649295030454404,
+  //         y: -26.649295030454404,
+  //         z: -26.649295030454404,
+  //       },
+  //     },
+  //   });
+  //   const a = Buffer.alloc(newbuffer.length);
+  //   a.fill(newbuffer);
+  //   console.log(a);
+  //   console.log(msgpack.decode(a));
+  //   return newbuffer;
+  // }
 }
