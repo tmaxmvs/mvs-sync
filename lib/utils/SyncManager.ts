@@ -22,8 +22,6 @@ export class SyncManager extends MessageWriter {
   onCreateObject: (any: any) => any;
   onRemoveObject: (objectID: number) => any;
   onSyncObject: (any: any) => any;
-  onRoomInfo: (any: any) => any;
-  onRoomListInfo: (any: any) => any;
 
   /**
    *
@@ -35,15 +33,21 @@ export class SyncManager extends MessageWriter {
     this.socket.binaryType = "arraybuffer";
   }
 
+  initWebsocket(_url: string) {
+    this.socket = new WebSocket(_url);
+    this.socket.binaryType = "arraybuffer";
+    this.listner();
+  }
+
   // 서버로부터 응답 받기
   listner() {
     this.socket.onmessage = (e) => {
-      this.ReadProtocol(e);
+      this.#ReadProtocol(e);
     };
   }
 
   // 서버로부터 받은 응답 해석
-  ReadProtocol(e: any) {
+  #ReadProtocol(e: any) {
     let dataView = new DataView(e.data, 0);
     let offset = 0;
     const tcpHeader = dataView.getUint32(offset, true);
@@ -76,7 +80,7 @@ export class SyncManager extends MessageWriter {
 
         // 객체 생성
         case protocol.eMessageID.CREATE_OBJECT_RES:
-          offset += this.getCreateObj(offset, dataView, offsetBound);
+          offset += this.#getCreateObj(offset, dataView, offsetBound);
           break;
 
         // 객체 삭제
@@ -88,7 +92,7 @@ export class SyncManager extends MessageWriter {
 
         // 싱크
         case protocol.eMessageID.SYNC_VALUE_RES:
-          offset += this.getSync(offset, dataView, offsetBound);
+          offset += this.#getSync(offset, dataView, offsetBound);
           break;
 
         // 커넥션 ID
@@ -98,11 +102,11 @@ export class SyncManager extends MessageWriter {
           break;
         // 룸 리스트
         case protocol.eMessageID.ROOM_LIST_RES:
-          offset += this.getRoomList(offset, dataView, offsetBound);
-          break;
+          const roomList = this.#getRoomList(offset, dataView, offsetBound);
+          return roomList;
         case protocol.eMessageID.ROOM_INFO_RES:
-          offset += this.getRoomInfo(offset, dataView, offsetBound);
-          break;
+          const roomInfo = this.#getRoomInfo(offset, dataView, offsetBound);
+          return roomInfo;
         default:
           return 0;
       }
@@ -114,7 +118,7 @@ export class SyncManager extends MessageWriter {
    * @params offset: 현재까지 증가했던 오프셋, dataView, offsetBound: 현재까지 오프셋바운드
    * @type number
    */
-  getRoomList(offset: number, dataView: any, offsetBound: number): number {
+  #getRoomList(offset: number, dataView: any, offsetBound: number) {
     let roomList: any[] = [];
     let tempList: any = new Object();
 
@@ -126,9 +130,10 @@ export class SyncManager extends MessageWriter {
         String.fromCharCode(byte)
       );
       let stringChar = charCodes.join("");
-      let roomName = this.tidy(stringChar);
+      let roomName = this.#tidy(stringChar);
       offset += 80;
 
+      // TODO: 준엽님 player Number 숫자 제대로 안나와요 ㅠ
       let playerNumber: number = dataView.getUint32(offset, true);
       offset += protocol.eOffsetManager.OFFSET_LENGTH;
 
@@ -140,11 +145,11 @@ export class SyncManager extends MessageWriter {
       roomList.push(tempList);
     }
     // RoomList
-    this.onRoomListInfo([roomList]);
-    return offset;
+
+    return roomList;
   }
 
-  tidy(s: string) {
+  #tidy(s: string) {
     const tidy =
       typeof s === "string" ? s.replace(/[\x00-\x1F\x7F-\xA0]+/g, "") : s;
     return tidy;
@@ -155,7 +160,7 @@ export class SyncManager extends MessageWriter {
    * @params offset: 현재까지 증가했던 오프셋, dataView, offsetBound: 현재까지 오프셋바운드
    * @type number
    */
-  getRoomInfo(offset: number, dataView: any, offsetBound: number): number {
+  #getRoomInfo(offset: number, dataView: any, offsetBound: number): number {
     let roomInfo: any = new Object();
 
     while (offset < 4 + offsetBound) {
@@ -167,13 +172,13 @@ export class SyncManager extends MessageWriter {
         String.fromCharCode(byte)
       );
       let stringChar = charCodes.join("");
-      let roomName = this.tidy(stringChar);
+      let roomName = this.#tidy(stringChar);
       offset += 80;
 
       let playerNumber: number = dataView.getUint32(offset, true);
       offset += protocol.eOffsetManager.OFFSET_LENGTH;
 
-      let playerLst: any[] = [];
+      let playerList: any[] = [];
       if (playerNumber > 0) {
         for (let i = 0; i < playerNumber; i++) {
           let byteView2 = new Uint8Array(dataView.buffer, offset, 40);
@@ -181,13 +186,13 @@ export class SyncManager extends MessageWriter {
             String.fromCharCode(byte)
           );
           let stringChar2 = charCodes2.join("");
-          let playerName = this.tidy(stringChar2);
+          let playerName = this.#tidy(stringChar2);
           offset += 40;
 
           let playerID: number = dataView.getUint32(offset, true);
           offset += protocol.eOffsetManager.OFFSET_LENGTH;
 
-          playerLst.push({
+          playerList.push({
             PlayerID: playerID,
             PlayerName: playerName,
           });
@@ -195,15 +200,14 @@ export class SyncManager extends MessageWriter {
       }
 
       roomInfo = {
-        RoomID: roomID,
-        RoomName: roomName,
-        PlayerNumber: playerNumber,
-        PlayerLst: playerLst,
+        roomID,
+        roomName,
+        players: playerNumber,
+        playerList,
       };
     }
-    // RoomInfo
-    this.onRoomInfo([roomInfo]);
-    return offset;
+
+    return roomInfo;
   }
 
   /**
@@ -211,7 +215,7 @@ export class SyncManager extends MessageWriter {
    * @params offset: 현재까지 증가했던 오프셋, dataView, offsetBound: 현재까지 오프셋바운드
    * @type number
    */
-  getCreateObj(offset: number, dataView: any, offsetBound: number): number {
+  #getCreateObj(offset: number, dataView: any, offsetBound: number): number {
     let ObjId = dataView.getUint32(offset, true);
     offset += protocol.eOffsetManager.OFFSET_LENGTH;
 
@@ -245,7 +249,7 @@ export class SyncManager extends MessageWriter {
    * @params offset: 현재까지 증가했던 오프셋, dataView, offsetBound: 현재까지 오프셋바운드
    * @type number
    */
-  getSync(offset: number, dataView: any, offsetBound: number): number {
+  #getSync(offset: number, dataView: any, offsetBound: number): number {
     let syncObjId = dataView.getUint32(offset, true);
     offset += protocol.eOffsetManager.OFFSET_LENGTH;
     const syncAttributes: any = new Object();
@@ -349,14 +353,24 @@ export class SyncManager extends MessageWriter {
     );
   }
 
-  reqRoomInfo(roomNumber: number) {
+  reqRoomInfo(roomNumber: number, cb: Function) {
     this.setMessageBodyOne(roomNumber);
     this.socket.send(this.setBatch(protocol.eMessageID.ROOM_INFO_REQ));
+
+    this.socket.onmessage = (e) => {
+      const response = this.#ReadProtocol(e);
+      cb(response);
+    };
   }
 
-  reqRoomListInfo() {
+  reqRoomListInfo(cb: Function) {
     this.setMessageBodyZero();
     this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
+
+    this.socket.onmessage = (e) => {
+      const response = this.#ReadProtocol(e);
+      cb(response);
+    };
   }
 
   /**
