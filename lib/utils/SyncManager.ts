@@ -29,7 +29,10 @@ export class SyncManager extends MessageWriter {
    */
   constructor(_url: string) {
     super();
-    this.socket = new WebSocket(_url);
+    if (!this.socket) {
+      console.log("constructor");
+      this.socket = new WebSocket(_url);
+    }
     this.socket.binaryType = "arraybuffer";
   }
 
