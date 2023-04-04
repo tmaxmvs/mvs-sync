@@ -13,7 +13,7 @@ interface objType {
 
 export class SyncManager extends MessageWriter {
   #connectionID: number;
-  socket: WebSocket;
+  socket: WebSocket = null;
 
   #objectList: Map<number, object> = new Map();
 
@@ -357,19 +357,31 @@ export class SyncManager extends MessageWriter {
   }
 
   reqRoomInfo(roomNumber: number, cb: Function) {
+    const isWebSocketOpen = this.socket.readyState === WebSocket.OPEN;
     this.setMessageBodyOne(roomNumber);
-    this.socket.send(this.setBatch(protocol.eMessageID.ROOM_INFO_REQ));
-
+    if (isWebSocketOpen) {
+      this.socket.send(this.setBatch(protocol.eMessageID.ROOM_INFO_REQ));
+    } else {
+      this.socket.onopen = () => {
+        this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
+      };
+    }
     this.socket.onmessage = (e) => {
       const response = this.#ReadProtocol(e);
       cb(response);
     };
   }
 
-  reqRoomListInfo(cb: Function) {
+  async reqRoomListInfo(cb: Function) {
+    const isWebSocketOpen = this.socket.readyState === WebSocket.OPEN;
     this.setMessageBodyZero();
-    this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
-
+    if (isWebSocketOpen) {
+      this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
+    } else {
+      this.socket.onopen = () => {
+        this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
+      };
+    }
     this.socket.onmessage = (e) => {
       const response = this.#ReadProtocol(e);
       cb(response);
