@@ -1,6 +1,6 @@
 {
   "name": "mvs-sync",
-  "version": "1.0.10",
+  "version": "1.0.12",
   "description": "Modules for synchronizing with mvs synchronization server",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

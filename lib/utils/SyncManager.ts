@@ -368,7 +368,7 @@ export class SyncManager extends MessageWriter {
     }
     this.socket.onmessage = (e) => {
       const response = this.#ReadProtocol(e);
-      cb(response);
+      response instanceof Object && cb(response);
     };
   }
 
@@ -384,7 +384,7 @@ export class SyncManager extends MessageWriter {
     }
     this.socket.onmessage = (e) => {
       const response = this.#ReadProtocol(e);
-      cb(response);
+      Array.isArray(response) && cb(response);
     };
   }
 
