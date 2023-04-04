@@ -372,7 +372,7 @@ export class SyncManager extends MessageWriter {
     };
   }
 
-  async reqRoomListInfo(cb: Function) {
+  reqRoomListInfo(cb: Function) {
     const isWebSocketOpen = this.socket.readyState === WebSocket.OPEN;
     this.setMessageBodyZero();
     if (isWebSocketOpen) {
