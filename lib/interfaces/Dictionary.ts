@@ -19,6 +19,7 @@ export enum eMessageID {
   SYNC_CUSTOM_VALUE_RES = 0xa3020202,
   SYNC_TRANSFORM_REQ = 0xa3030101,
   SYNC_TRANSFORM_RES = 0xa3030102,
+  OTHER_CLIENT_JOINED = 0xa2000702,
 }
 
 export enum eOffsetManager {
