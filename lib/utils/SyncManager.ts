@@ -12,9 +12,9 @@ interface objType {
 }
 
 export class SyncManager extends MessageWriter {
-  #connectionID: number;
+  #connectionID: number = 0;
   socket: WebSocket = null;
-
+  initialized: boolean = false;
   #objectList: Map<number, object> = new Map();
 
   onCreateRoom: (roomNumber: string) => any;
@@ -22,6 +22,11 @@ export class SyncManager extends MessageWriter {
   onCreateObject: (any: any) => any;
   onRemoveObject: (objectID: number) => any;
   onSyncObject: (any: any) => any;
+  onOtherClientJoined: (
+    clientId: number,
+    clientType: number,
+    clientName: string
+  ) => any;
 
   /**
    *
@@ -29,24 +34,35 @@ export class SyncManager extends MessageWriter {
    */
   constructor(_url: string) {
     super();
+    this.initialize(_url).then(() => {
+      this.initialized = true;
+    });
+  }
+
+  async initialize(_url: string) {
     if (!this.socket) {
-      console.log("constructor");
       this.socket = new WebSocket(_url);
     }
     this.socket.binaryType = "arraybuffer";
-  }
+    this.subscribe();
 
-  initWebsocket(_url: string) {
-    this.socket = new WebSocket(_url);
-    this.socket.binaryType = "arraybuffer";
-    this.listner();
+    return await new Promise((resolve) => {
+      const interval = setInterval(() => {
+        if (this.#connectionID !== 0) {
+          resolve(true);
+          clearInterval(interval);
+        }
+      }, 60);
+    });
   }
 
   // 서버로부터 응답 받기
-  listner() {
-    this.socket.onmessage = (e) => {
+  subscribe() {
+    const subscribe = (e: any) => {
       this.#ReadProtocol(e);
     };
+
+    this.socket.addEventListener("message", subscribe);
   }
 
   // 서버로부터 받은 응답 해석
@@ -62,7 +78,6 @@ export class SyncManager extends MessageWriter {
       const messageID = dataView.getUint32(offset, true);
       offset += protocol.eOffsetManager.MESSAGE_ID_LENGTH;
       // MessageID
-      // console.log(serverData[1].toString(16))
       offsetBound = offsetBound + dataView.getUint32(offset, true) + 8;
       offset += protocol.eOffsetManager.MESSAGE_LEN_LENGTH;
 
@@ -106,14 +121,41 @@ export class SyncManager extends MessageWriter {
         // 룸 리스트
         case protocol.eMessageID.ROOM_LIST_RES:
           const roomList = this.#getRoomList(offset, dataView, offsetBound);
-          return roomList;
+          return new Promise((resolve, reject) => {
+            resolve(roomList);
+          });
         case protocol.eMessageID.ROOM_INFO_RES:
           const roomInfo = this.#getRoomInfo(offset, dataView, offsetBound);
-          return roomInfo;
+          return new Promise((resolve, reject) => {
+            resolve(roomInfo);
+          });
+        case protocol.eMessageID.OTHER_CLIENT_JOINED:
+          offset += this.#getOtherClientJoined(offset, dataView);
+          break;
         default:
           return 0;
       }
     }
+  }
+
+  #getOtherClientJoined(offset: number, dataView: any): number {
+    const clientType = dataView.getUint32(offset, true);
+    offset += protocol.eOffsetManager.OFFSET_LENGTH;
+
+    const clientId = dataView.getUint32(offset, true);
+    offset += protocol.eOffsetManager.OFFSET_LENGTH;
+
+    let byteView = new Uint8Array(dataView.buffer, offset, 40);
+    let charCodes = Array.from(byteView).map((byte) =>
+      String.fromCharCode(byte)
+    );
+    let stringChar = charCodes.join("");
+    let clientName = this.#tidy(stringChar);
+
+    offset += 40;
+
+    this.onOtherClientJoined(clientId, clientType, clientName);
+    return offset;
   }
 
   /**
@@ -366,10 +408,18 @@ export class SyncManager extends MessageWriter {
         this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
       };
     }
-    this.socket.onmessage = (e) => {
+
+    const getRoomInfo = (e: any) => {
       const response = this.#ReadProtocol(e);
-      response instanceof Object && cb(response);
+      if (typeof response !== "number" && typeof response !== "undefined") {
+        response.then((res) => {
+          response instanceof Object && cb(response);
+          this.socket.removeEventListener("message", getRoomInfo);
+        });
+      }
     };
+
+    this.socket.addEventListener("message", getRoomInfo);
   }
 
   reqRoomListInfo(cb: Function) {
@@ -379,13 +429,26 @@ export class SyncManager extends MessageWriter {
       this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
     } else {
       this.socket.onopen = () => {
-        this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
+        const interval = setInterval(() => {
+          if (this.#connectionID !== 0) {
+            this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
+            clearInterval(interval);
+          }
+        }, 60);
       };
     }
-    this.socket.onmessage = (e) => {
+
+    const getRoomListInfo = (e: any) => {
       const response = this.#ReadProtocol(e);
-      Array.isArray(response) && cb(response);
+      if (typeof response !== "number" && typeof response !== "undefined") {
+        response.then((res) => {
+          Array.isArray(res) && cb(res);
+          this.socket.removeEventListener("message", getRoomListInfo);
+        });
+      }
     };
+
+    this.socket.addEventListener("message", getRoomListInfo);
   }
 
   /**
