@@ -11,6 +11,12 @@ interface objType {
   [key: string]: any;
 }
 
+interface OtherClientJoined {
+  clientId: number;
+  clientType: number;
+  clientName: string;
+}
+
 export class SyncManager extends MessageWriter {
   #connectionID: number = 0;
   socket: WebSocket = null;
@@ -22,11 +28,7 @@ export class SyncManager extends MessageWriter {
   onCreateObject: (any: any) => any;
   onRemoveObject: (objectID: number) => any;
   onSyncObject: (any: any) => any;
-  onOtherClientJoined: (
-    clientId: number,
-    clientType: number,
-    clientName: string
-  ) => any;
+  onOtherClientJoined: (res: OtherClientJoined) => any;
 
   /**
    *
@@ -154,7 +156,13 @@ export class SyncManager extends MessageWriter {
 
     offset += 40;
 
-    this.onOtherClientJoined(clientId, clientType, clientName);
+    const otherClient = {
+      clientId,
+      clientType,
+      clientName,
+    };
+
+    this.onOtherClientJoined(otherClient);
     return offset;
   }
 
