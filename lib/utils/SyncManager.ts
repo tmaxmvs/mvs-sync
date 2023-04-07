@@ -1,21 +1,10 @@
 import * as protocol from "../interfaces/Dictionary";
+import {
+  ObjType,
+  OtherClientJoined,
+  SyncType,
+} from "../interfaces/SyncManagerInterfaces";
 import { MessageWriter } from "./MessageWriter";
-
-interface SyncType {
-  objID: number;
-  attributes: { [key: number]: number };
-}
-
-interface objType {
-  objID: number;
-  [key: string]: any;
-}
-
-interface OtherClientJoined {
-  clientId: number;
-  clientType: number;
-  clientName: string;
-}
 
 export class SyncManager extends MessageWriter {
   #connectionID: number = 0;
@@ -88,23 +77,36 @@ export class SyncManager extends MessageWriter {
         case protocol.eMessageID.ROOM_CREATE_RES:
           // 룸 생성 응답
           const roomId: string = serverData[3].toString(16);
+          this.#checkCallback(
+            this.onCreateRoom,
+            "onCreateRoom 콜백을 입력하세요"
+          );
           this.onCreateRoom(roomId);
           offset += protocol.eOffsetManager.OFFSET_LENGTH;
           break;
         // 룸 connect 응답
-        case protocol.eMessageID.ROOM_CONNECT_RES:
+        case protocol.eMessageID.ROOM_JOIN_RES:
           const sceneId: number = Number(serverData[3]);
+          this.#checkCallback(this.onJoinRoom, "onJoinRoom 콜백을 입력하세요");
           this.onJoinRoom(sceneId);
           offset += protocol.eOffsetManager.OFFSET_LENGTH;
           break;
 
         // 객체 생성
         case protocol.eMessageID.CREATE_OBJECT_RES:
+          this.#checkCallback(
+            this.onCreateObject,
+            "onCreateObject 콜백을 입력하세요"
+          );
           offset += this.#getCreateObj(offset, dataView, offsetBound);
           break;
 
         // 객체 삭제
         case protocol.eMessageID.REMOVE_OBJECT_RES:
+          this.#checkCallback(
+            this.onRemoveObject,
+            "onRemoveObject 콜백을 입력하세요"
+          );
           const removeObjId = dataView.getUint32(offset, true);
           offset += protocol.eOffsetManager.OFFSET_LENGTH;
           this.onRemoveObject(removeObjId);
@@ -112,6 +114,10 @@ export class SyncManager extends MessageWriter {
 
         // 싱크
         case protocol.eMessageID.SYNC_VALUE_RES:
+          this.#checkCallback(
+            this.onSyncObject,
+            "onSyncObject 콜백을 입력하세요"
+          );
           offset += this.#getSync(offset, dataView, offsetBound);
           break;
 
@@ -132,11 +138,21 @@ export class SyncManager extends MessageWriter {
             resolve(roomInfo);
           });
         case protocol.eMessageID.OTHER_CLIENT_JOINED:
+          this.#checkCallback(
+            this.onOtherClientJoined,
+            "onOtherClientJoined 콜백을 입력하세요"
+          );
           offset += this.#getOtherClientJoined(offset, dataView);
           break;
         default:
           return 0;
       }
+    }
+  }
+
+  #checkCallback(callback: any, errorMsg: string) {
+    if (!callback) {
+      throw new Error(errorMsg);
     }
   }
 
@@ -152,7 +168,7 @@ export class SyncManager extends MessageWriter {
       String.fromCharCode(byte)
     );
     let stringChar = charCodes.join("");
-    let clientName = this.#tidy(stringChar);
+    let clientName = this.#removeInvalidCharacters(stringChar);
 
     offset += 40;
 
@@ -183,7 +199,7 @@ export class SyncManager extends MessageWriter {
         String.fromCharCode(byte)
       );
       let stringChar = charCodes.join("");
-      let roomName = this.#tidy(stringChar);
+      let roomName = this.#removeInvalidCharacters(stringChar);
       offset += 80;
 
       // TODO: 준엽님 player Number 숫자 제대로 안나와요 ㅠ
@@ -202,7 +218,7 @@ export class SyncManager extends MessageWriter {
     return roomList;
   }
 
-  #tidy(s: string) {
+  #removeInvalidCharacters(s: string) {
     const tidy =
       typeof s === "string" ? s.replace(/[\x00-\x1F\x7F-\xA0]+/g, "") : s;
     return tidy;
@@ -225,7 +241,7 @@ export class SyncManager extends MessageWriter {
         String.fromCharCode(byte)
       );
       let stringChar = charCodes.join("");
-      let roomName = this.#tidy(stringChar);
+      let roomName = this.#removeInvalidCharacters(stringChar);
       offset += 80;
 
       let playerNumber: number = dataView.getUint32(offset, true);
@@ -239,7 +255,7 @@ export class SyncManager extends MessageWriter {
             String.fromCharCode(byte)
           );
           let stringChar2 = charCodes2.join("");
-          let playerName = this.#tidy(stringChar2);
+          let playerName = this.#removeInvalidCharacters(stringChar2);
           offset += 40;
 
           let playerID: number = dataView.getUint32(offset, true);
@@ -338,8 +354,9 @@ export class SyncManager extends MessageWriter {
    * @type number
    */
   reqCreateAndJoinRoom(sceneID: number) {
-    this.setMessageBodyOne(sceneID);
-    this.socket.send(this.setBatch(protocol.eMessageID.ROOM_CREATE_REQ));
+    this.socket.send(
+      this.setBatch(protocol.eMessageID.ROOM_CREATE_REQ, sceneID)
+    );
   }
 
   /**
@@ -348,15 +365,15 @@ export class SyncManager extends MessageWriter {
    * @type number
    */
   reqJoinRoom(roomNumber: number) {
-    this.setMessageBodyOne(roomNumber);
-    this.socket.send(this.setBatch(protocol.eMessageID.ROOM_CONNECT_REQ));
+    this.socket.send(
+      this.setBatch(protocol.eMessageID.ROOM_JOIN_REQ, roomNumber)
+    );
   }
 
   /**
    * 씬 생성이 끝나면 보낸다. 서버에서는 클라이언트에게 동기화할 객체 정보들을 모두 보내준다.
    */
   sceneLoadedComplete() {
-    this.setMessageBodyZero();
     this.socket.send(this.setBatch(protocol.eMessageID.SCENE_LOAD_COMPLETE));
   }
 
@@ -367,9 +384,10 @@ export class SyncManager extends MessageWriter {
    * - objID : 클래스의 고유 넘버
    * - attributes : 해당 클래스 속성.
    */
-  reqCreateObject(params: SyncType[] | any[]) {
-    this.setMessageBodyObject(params);
-    this.socket.send(this.setBatch(protocol.eMessageID.CREATE_OBJECT_REQ));
+  reqCreateObject(params: SyncType[]) {
+    this.socket.send(
+      this.setBatch(protocol.eMessageID.CREATE_OBJECT_REQ, params)
+    );
   }
 
   /**
@@ -377,8 +395,9 @@ export class SyncManager extends MessageWriter {
    * @param objectID prefab number(unique number of the class?) + instance number
    */
   reqRemoveObject(objectID: number) {
-    this.setMessageBodyOne(objectID);
-    this.socket.send(this.setBatch(protocol.eMessageID.REMOVE_OBJECT_REQ));
+    this.socket.send(
+      this.setBatch(protocol.eMessageID.REMOVE_OBJECT_REQ, objectID)
+    );
   }
 
   /**
@@ -389,8 +408,7 @@ export class SyncManager extends MessageWriter {
    * - attributes : 해당 클래스 속성.
    */
   reqSyncObject(obj: SyncType) {
-    this.setMessageBodySync(obj);
-    this.socket.send(this.setBatch(protocol.eMessageID.SYNC_VALUE_REQ));
+    this.socket.send(this.setBatch(protocol.eMessageID.SYNC_VALUE_REQ, obj));
   }
   /**
    *
@@ -399,18 +417,18 @@ export class SyncManager extends MessageWriter {
    * - objID : 클래스의 고유 넘버
    * - attributes : 해당 클래스 속성.
    */
-  reqCreatePublicObject(params: SyncType[] | any[]) {
-    this.setMessageBodyObject(params);
+  reqCreatePublicObject(params: SyncType[]) {
     this.socket.send(
-      this.setBatch(protocol.eMessageID.CREATE_PUBLIC_OBJECT_REQ)
+      this.setBatch(protocol.eMessageID.CREATE_PUBLIC_OBJECT_REQ, params)
     );
   }
 
   reqRoomInfo(roomNumber: number, cb: Function) {
     const isWebSocketOpen = this.socket.readyState === WebSocket.OPEN;
-    this.setMessageBodyOne(roomNumber);
     if (isWebSocketOpen) {
-      this.socket.send(this.setBatch(protocol.eMessageID.ROOM_INFO_REQ));
+      this.socket.send(
+        this.setBatch(protocol.eMessageID.ROOM_INFO_REQ, roomNumber)
+      );
     } else {
       this.socket.onopen = () => {
         this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
@@ -432,7 +450,6 @@ export class SyncManager extends MessageWriter {
 
   reqRoomListInfo(cb: Function) {
     const isWebSocketOpen = this.socket.readyState === WebSocket.OPEN;
-    this.setMessageBodyZero();
     if (isWebSocketOpen) {
       this.socket.send(this.setBatch(protocol.eMessageID.ROOM_LIST_REQ));
     } else {
@@ -463,7 +480,7 @@ export class SyncManager extends MessageWriter {
    *
    * @param arr 당신이 동기화하고 싶은 object들의 배열 (prefabID(=objID) 및 속성들)
    */
-  syncObject(arr: objType[]) {
+  syncObject(arr: ObjType[]) {
     for (const iterator of arr) {
       this.#objectList.set(iterator.objID, iterator);
     }
@@ -481,7 +498,7 @@ export class SyncManager extends MessageWriter {
    *
    * @param 혹시라도 동기화에 추가하고 싶은 오브젝트가 생길 수도 있기 떄문에..
    */
-  setObject(obj: objType) {
+  setObject(obj: ObjType) {
     this.#objectList.set(obj.objID, obj);
   }
 

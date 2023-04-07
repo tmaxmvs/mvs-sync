@@ -1,4 +1,7 @@
 import * as protocol from "../interfaces/Dictionary";
+import msgpack from "msgpack-lite";
+import { SyncType } from "../interfaces/SyncManagerInterfaces";
+
 /*
 
 (bytes)
@@ -14,284 +17,124 @@ batchHeader 0 - 3
 | batchHeader   | messageID     | messageLen    | messageBody ~ (repeat...)            | messageID     | messageLen    | messageBody ~                         | messageID     | messageLen    | messageBody ~                         |...
 -----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------...
 
-
-
 */
 
-// TODO: stack 메시지들을 담아 놓고, 1/60 초마다 담은 것을 보낸다.
+// stack 메시지들을 담아 놓고, 1/60 초마다 담은 것을 보낸다.
 // class batch
+const DEFAULT_PATCH_RATE = 1000 / 20; // 20fps (50ms)
+const DEFAULT_SIMULATION_INTERVAL = 1000 / 60; // 60fps (16.66ms)
+
 export class MessageWriter {
+  #patchInterval: boolean = false;
+  #delay: number = DEFAULT_SIMULATION_INTERVAL;
+
+  #offset: number = protocol.eOffsetManager.INIT_OFFSET;
+
   #batch: ArrayBuffer;
 
   #batchHeader: Buffer;
   #batchBody: Buffer;
 
-  #messageID: Buffer;
-  #messageLen: Buffer;
+  #message: Buffer;
 
   #messageHeader: Buffer;
   #messageBody: Buffer;
-
-  // batchBody에 들어갈 하나의 메시지
-  #message: Buffer;
-  #messageStack: ArrayBuffer;
 
   // getter
   #getBatchBodyLength() {
     return this.#batchBody.byteLength;
   }
 
-  // setter
-  #setMessageID(_msgID: number) {
-    const _messageID: Buffer = Buffer.alloc(
-      protocol.eOffsetManager.MESSAGE_ID_LENGTH
+  #setMessageHeader(_msgID: number) {
+    // this.#message.writeUInt32LE(_msgID);
+    // this.#message.writeUInt32LE(this.#messageBody.byteLength, 4);
+    const messageHeader: Buffer = Buffer.alloc(
+      protocol.eOffsetManager.MESSAGE_HEADER_LENGTH
     );
 
-    _messageID.writeUInt32LE(_msgID, 0);
+    // let offset = protocol.eOffsetManager.INIT_OFFSET;
+    messageHeader.writeUInt32LE(_msgID);
+    messageHeader.writeUInt32LE(this.#messageBody.byteLength, 4);
 
-    this.#messageID = _messageID;
-    return this;
+    this.#messageHeader = messageHeader;
   }
 
-  // TODO: setMessageBody 테스트 및 변경
-  setMessageBody(
-    option: "zero" | "one" | "object" | "sync",
-    params?: any[] | number
-  ) {
-    switch (option) {
-      case "object":
-      case "sync":
-        let _messageBody;
+  createObjectMessage(_params: SyncType, _existingMessageBody?: Buffer) {
+    const objID = Buffer.alloc(4);
 
-        if (!Array.isArray(params)) {
-          throw new Error("params에 배열을 넣어주세요");
-        }
+    const isInstanceID = _params.syncObjID > 0x00010000;
 
-        for (const iterator of params) {
-          let _objID = Buffer.alloc(4);
-          if (option === "sync") {
-            _objID.writeUInt32LE(iterator.objID, 0);
-          } else {
-            _objID.writeUInt16LE(iterator.objID, 2);
-          }
+    isInstanceID
+      ? objID.writeUInt32LE(_params.syncObjID, 0) // instance ID 부여 받았을 때
+      : objID.writeUInt16LE(_params.syncObjID, 2); // prefab ID만 있을 때
 
-          let _attribution;
-          for (const key in iterator.attributes) {
-            let _attributeID = Buffer.alloc(4);
-            let _attributeLen = Buffer.alloc(4);
-            let _attributeData = Buffer.allocUnsafe(8);
-
-            _attributeID.writeUInt32LE((1 << 24) | parseInt(key, 0));
-
-            const value: number = iterator.attributes[key];
-
-            _attributeData.writeDoubleLE(value, 0);
-
-            _attributeLen.writeUInt32LE(_attributeData.byteLength);
-
-            _attribution = Buffer.concat([
-              _attributeID,
-              _attributeLen,
-              _attributeData,
-            ]);
-            if (_messageBody !== undefined) {
-              _messageBody = Buffer.concat([_messageBody, _attribution]);
-            } else {
-              _messageBody = Buffer.concat([_attribution]);
-            }
-          }
-
-          _messageBody = Buffer.concat([_objID, _messageBody]);
-        }
-        this.#messageBody = Buffer.alloc(_messageBody.byteLength);
-        this.#messageBody = _messageBody;
-        break;
-      case "one":
-        this.#messageBody = Buffer.alloc(4);
-        if (!Array.isArray(params)) {
-          this.#messageBody.writeUInt32LE(params);
-        }
-        break;
-      case "zero":
-        this.#messageBody = Buffer.alloc(0);
-        break;
-
-      default:
-        break;
-    }
-  }
-
-  setMessageBodyZero() {
-    this.#messageBody = Buffer.alloc(0);
-    return this;
-  }
-  setMessageBodyOne(params: number) {
-    this.#messageBody = Buffer.alloc(4);
-    this.#messageBody.writeUInt32LE(params);
-    return this;
-  }
-
-  setMessageBodyObject(params: any[]) {
-    let _messageBody;
-    for (const iterator of params) {
-      let _objID = Buffer.alloc(4);
-      _objID.writeUInt16LE(iterator.objID, 2);
-
-      let _attribution;
-      for (const key in iterator.attributes) {
-        let _attributeID = Buffer.alloc(4);
-        let _attributeLen = Buffer.alloc(4);
-        let _attributeData = Buffer.allocUnsafe(8);
-
-        // TODO: 1 값 동적으로
-        _attributeID.writeUInt32LE((1 << 24) | parseInt(key, 0));
-
-        const value: number = iterator.attributes[key];
-
-        _attributeData.writeDoubleLE(value, 0);
-
-        _attributeLen.writeUInt32LE(_attributeData.byteLength);
-
-        _attribution = Buffer.concat([
-          _attributeID,
-          _attributeLen,
-          _attributeData,
-        ]);
-        if (_messageBody !== undefined) {
-          _messageBody = Buffer.concat([_messageBody, _attribution]);
-        } else {
-          _messageBody = Buffer.concat([_attribution]);
-        }
-      }
-
-      _messageBody = Buffer.concat([_objID, _messageBody]);
-    }
-    this.#messageBody = Buffer.alloc(_messageBody.byteLength);
-    this.#messageBody = _messageBody;
-    return this;
-  }
-
-  setMessageBodySync(obj: any) {
-    let _messageBody;
-
-    let _attribution;
-
-    let _objID = Buffer.alloc(4);
-    _objID.writeUInt32LE(obj.objID, 0);
-
-    for (const key in obj.attributes) {
-      let _attributeID = Buffer.alloc(4);
-      let _attributeLen = Buffer.alloc(4);
-      let _attributeData;
-
-      // 1바이트 kind, 나머지 3바이트
-      _attributeID.writeUInt32LE((1 << 24) | parseInt(key, 0));
-      const value = obj.attributes[key];
-      _attributeData = Buffer.alloc(8);
-
-      _attributeData.writeDoubleLE(value, 0);
-
-      _attributeLen.writeUInt32LE(_attributeData.byteLength);
-
-      _attribution = Buffer.concat([
-        _attributeID,
-        _attributeLen,
-        _attributeData,
-      ]);
-
-      if (_messageBody !== undefined) {
-        _messageBody = Buffer.concat([_messageBody, _attribution]);
-      } else {
-        _messageBody = Buffer.concat([_attribution]);
-      }
-    }
-    _messageBody = Buffer.concat([_objID, _messageBody]);
-
-    this.#messageBody = Buffer.alloc(_messageBody.byteLength);
-    this.#messageBody = _messageBody;
-    return this;
-  }
-
-  #setMessageLen() {
-    const _msgBodyLength: Buffer = Buffer.alloc(
-      protocol.eOffsetManager.MESSAGE_LEN_LENGTH
+    const attributions = Buffer.alloc(
+      Object.keys(_params.attributes).length * 16
     );
-    _msgBodyLength.writeUInt32LE(this.#messageBody.byteLength);
 
-    this.#messageLen = _msgBodyLength;
-    return this;
+    let offset = protocol.eOffsetManager.INIT_OFFSET;
+
+    for (const key in _params.attributes) {
+      const value: number = _params.attributes[key];
+      offset = attributions.writeUInt32LE((1 << 24) | parseInt(key, 0), offset);
+      offset = attributions.writeUInt32LE(8, offset);
+      offset = attributions.writeDoubleLE(value, offset);
+    }
+
+    return _existingMessageBody
+      ? Buffer.concat([_existingMessageBody, objID, attributions]) // messageBody에 여러개 들어갈 때
+      : Buffer.concat([objID, attributions]); // messageBody에 1개만 들어갈 때
   }
 
-  #setMessageHeader() {
-    this.#messageHeader = Buffer.concat([this.#messageID, this.#messageLen]);
-    return this;
+  #createMessageBody(params?: number | SyncType | SyncType[]) {
+    // 객체 생성
+    if (Array.isArray(params)) {
+      let messageBody;
+      // 모든 객체에 대한 message 생성
+      for (const param of params) {
+        messageBody = this.createObjectMessage(param, messageBody);
+      }
+      this.#messageBody = messageBody;
+    }
+    // 싱크
+    else if (typeof params === "object") {
+      this.#messageBody = this.createObjectMessage(params);
+    }
+    // 룸 생성, 룸 입장, 객체 삭제, 룸 정보 요청
+    else if (typeof params === "number") {
+      this.#messageBody = Buffer.alloc(4);
+      this.#messageBody.writeUInt32LE(params);
+    }
+    // 룸 전체 정보 요청
+    else {
+      this.#messageBody = Buffer.alloc(0);
+    }
   }
 
   #setBatchBody() {
     this.#batchBody = Buffer.concat([this.#messageHeader, this.#messageBody]);
-    return this;
   }
 
-  #setBatchHeader() {
-    const _batchHeader = Buffer.alloc(
+  #createBatchHeader() {
+    const batchHeader = Buffer.alloc(
       protocol.eOffsetManager.BATCH_HEADER_LENGTH
     );
-    _batchHeader.writeUInt32LE(this.#getBatchBodyLength());
+    batchHeader.writeUInt32LE(this.#getBatchBodyLength());
 
-    this.#batchHeader = _batchHeader;
-    return this;
+    this.#batchHeader = batchHeader;
   }
 
-  setBatch(_msgID: number) {
-    this.#setMessageID(_msgID);
-    this.#setMessageLen();
-    this.#setMessageHeader();
+  #setMessage(_msgID: number, _params?: number | SyncType | SyncType[]) {
+    this.#createMessageBody(_params);
+    this.#setMessageHeader(_msgID);
     this.#setBatchBody();
-    this.#setBatchHeader();
+  }
+
+  setBatch(_msgID: number, _params?: number | SyncType | SyncType[]) {
+    this.#setMessage(_msgID, _params);
+    this.#createBatchHeader();
 
     this.#batch = Buffer.concat([this.#batchHeader, this.#batchBody]);
     return this.#batch;
   }
-
-  #setMessage() {
-    this.#message = Buffer.concat([this.#messageHeader, this.#messageBody]);
-    return this;
-  }
-
-  setMessage(_msgID: number) {
-    this.#setMessageID(_msgID);
-    this.#setMessageLen();
-    this.#setMessageHeader();
-    this.#setMessage();
-  }
-  // this.#messageStack = Buffer.concat([this.#messageStack, this.#message]);
-  // testing() {
-  //   const newbuffer = msgpack.encode({
-  //     transform: {
-  //       scale: {
-  //         // 1
-  //         x: -26.649295030454404,
-  //         y: -26.649295030454404,
-  //         z: -26.649295030454404,
-  //       },
-  //       position: {
-  //         // 2
-  //         x: -26.649295030454404, // 0000 1010 0000 0000 0000 0000 0000 1101
-  //         y: -26.649295030454404,
-  //         z: -30.348903732394767,
-  //       },
-  //       rotation: {
-  //         // 3
-  //         x: -26.649295030454404,
-  //         y: -26.649295030454404,
-  //         z: -26.649295030454404,
-  //       },
-  //     },
-  //   });
-  //   const a = Buffer.alloc(newbuffer.length);
-  //   a.fill(newbuffer);
-  //   console.log(a);
-  //   console.log(msgpack.decode(a));
-  //   return newbuffer;
-  // }
 }
