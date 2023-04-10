@@ -1,5 +1,4 @@
 import * as protocol from "../interfaces/Dictionary";
-import msgpack from "msgpack-lite";
 import { SyncType } from "../interfaces/SyncManagerInterfaces";
 
 /*
@@ -30,111 +29,116 @@ export class MessageWriter {
 
   #offset: number = protocol.eOffsetManager.INIT_OFFSET;
 
-  #batch: ArrayBuffer;
-
-  #batchHeader: Buffer;
-  #batchBody: Buffer;
-
   #message: Buffer;
 
-  #messageHeader: Buffer;
-  #messageBody: Buffer;
-
-  // getter
-  #getBatchBodyLength() {
-    return this.#batchBody.byteLength;
-  }
-
   #setMessageHeader(_msgID: number) {
-    // this.#message.writeUInt32LE(_msgID);
-    // this.#message.writeUInt32LE(this.#messageBody.byteLength, 4);
-    const messageHeader: Buffer = Buffer.alloc(
-      protocol.eOffsetManager.MESSAGE_HEADER_LENGTH
+    this.#offset = this.#message.writeUInt32LE(_msgID, this.#offset);
+    this.#offset = this.#message.writeUInt32LE(
+      this.#message.byteLength -
+        protocol.eOffsetManager.MESSAGE_HEADER_LENGTH -
+        protocol.eOffsetManager.BATCH_HEADER_LENGTH,
+      this.#offset
     );
-
-    // let offset = protocol.eOffsetManager.INIT_OFFSET;
-    messageHeader.writeUInt32LE(_msgID);
-    messageHeader.writeUInt32LE(this.#messageBody.byteLength, 4);
-
-    this.#messageHeader = messageHeader;
   }
 
-  createObjectMessage(_params: SyncType, _existingMessageBody?: Buffer) {
-    const objID = Buffer.alloc(4);
-
+  createObjectMessage(_params: SyncType) {
     const isInstanceID = _params.syncObjID > 0x00010000;
 
     isInstanceID
-      ? objID.writeUInt32LE(_params.syncObjID, 0) // instance ID 부여 받았을 때
-      : objID.writeUInt16LE(_params.syncObjID, 2); // prefab ID만 있을 때
-
-    const attributions = Buffer.alloc(
-      Object.keys(_params.attributes).length * 16
-    );
-
-    let offset = protocol.eOffsetManager.INIT_OFFSET;
+      ? (this.#offset = this.#message.writeUInt32LE(
+          _params.syncObjID,
+          this.#offset
+        )) // instance ID 부여 받았을 때
+      : (this.#offset = this.#message.writeUInt16LE(
+          _params.syncObjID,
+          this.#offset + 2
+        )); // prefab ID만 있을 때
 
     for (const key in _params.attributes) {
       const value: number = _params.attributes[key];
-      offset = attributions.writeUInt32LE((1 << 24) | parseInt(key, 0), offset);
-      offset = attributions.writeUInt32LE(8, offset);
-      offset = attributions.writeDoubleLE(value, offset);
+      this.#offset = this.#message.writeUInt32LE(
+        (1 << 24) | parseInt(key, 0),
+        this.#offset
+      );
+      this.#offset = this.#message.writeUInt32LE(
+        protocol.eOffsetManager.SYNC_OBJECT_ATTR_DATA_LENGTH,
+        this.#offset
+      );
+      this.#offset = this.#message.writeDoubleLE(value, this.#offset);
     }
-
-    return _existingMessageBody
-      ? Buffer.concat([_existingMessageBody, objID, attributions]) // messageBody에 여러개 들어갈 때
-      : Buffer.concat([objID, attributions]); // messageBody에 1개만 들어갈 때
   }
 
-  #createMessageBody(params?: number | SyncType | SyncType[]) {
+  #getArrayParamsLength(params: SyncType[]) {
+    let messageBodyLength = 0;
+    for (const param of params) {
+      messageBodyLength +=
+        Object.keys(param.attributes).length *
+          (protocol.eOffsetManager.SYNC_OBJECT_ATTR_ID +
+            protocol.eOffsetManager.SYNC_OBJECT_ATTR_LEN_LENGTH +
+            protocol.eOffsetManager.SYNC_OBJECT_ATTR_DATA_LENGTH) +
+        protocol.eOffsetManager.SYNC_OBJECT_ID_LENGTH; // key 갯수 * (Attribute ID + Attribute Len + Attribute Len) + syncObject ID
+    }
+    return messageBodyLength;
+  }
+
+  #createMessage(_msgID: number, params?: number | SyncType | SyncType[]) {
+    let len =
+      protocol.eOffsetManager.MESSAGE_HEADER_LENGTH +
+      protocol.eOffsetManager.BATCH_HEADER_LENGTH;
     // 객체 생성
     if (Array.isArray(params)) {
-      let messageBody;
+      len += this.#getArrayParamsLength(params);
+      this.#message = Buffer.alloc(len);
+      this.#setMessageHeader(_msgID);
       // 모든 객체에 대한 message 생성
       for (const param of params) {
-        messageBody = this.createObjectMessage(param, messageBody);
+        this.createObjectMessage(param);
       }
-      this.#messageBody = messageBody;
     }
     // 싱크
     else if (typeof params === "object") {
-      this.#messageBody = this.createObjectMessage(params);
+      len +=
+        Object.keys(params.attributes).length *
+          (protocol.eOffsetManager.SYNC_OBJECT_ATTR_ID +
+            protocol.eOffsetManager.SYNC_OBJECT_ATTR_LEN_LENGTH +
+            protocol.eOffsetManager.SYNC_OBJECT_ATTR_DATA_LENGTH) +
+        protocol.eOffsetManager.SYNC_OBJECT_ID_LENGTH; // key 갯수 * (Attribute ID + Attribute Len + Attribute Len) + syncObject ID
+      this.#message = Buffer.alloc(len);
+      this.#setMessageHeader(_msgID);
+      this.createObjectMessage(params);
     }
     // 룸 생성, 룸 입장, 객체 삭제, 룸 정보 요청
     else if (typeof params === "number") {
-      this.#messageBody = Buffer.alloc(4);
-      this.#messageBody.writeUInt32LE(params);
+      len += protocol.eOffsetManager.OFFSET_LENGTH;
+
+      this.#message = Buffer.alloc(len);
+      this.#setMessageHeader(_msgID);
+      this.#offset = this.#message.writeUInt32LE(params, this.#offset);
     }
     // 룸 전체 정보 요청
     else {
-      this.#messageBody = Buffer.alloc(0);
+      this.#message = Buffer.alloc(len);
+      this.#setMessageHeader(_msgID);
     }
   }
 
-  #setBatchBody() {
-    this.#batchBody = Buffer.concat([this.#messageHeader, this.#messageBody]);
+  #initOffset() {
+    this.#offset = protocol.eOffsetManager.INIT_OFFSET;
   }
 
-  #createBatchHeader() {
-    const batchHeader = Buffer.alloc(
-      protocol.eOffsetManager.BATCH_HEADER_LENGTH
+  #setBatchHeader() {
+    this.#message.writeUInt32LE(
+      this.#offset - protocol.eOffsetManager.BATCH_HEADER_LENGTH,
+      0
     );
-    batchHeader.writeUInt32LE(this.#getBatchBodyLength());
-
-    this.#batchHeader = batchHeader;
-  }
-
-  #setMessage(_msgID: number, _params?: number | SyncType | SyncType[]) {
-    this.#createMessageBody(_params);
-    this.#setMessageHeader(_msgID);
-    this.#setBatchBody();
   }
 
   setBatch(_msgID: number, _params?: number | SyncType | SyncType[]) {
-    this.#setMessage(_msgID, _params);
-    this.#createBatchHeader();
+    this.#createMessage(_msgID, _params);
+    this.#setBatchHeader();
 
-    this.#batch = Buffer.concat([this.#batchHeader, this.#batchBody]);
-    return this.#batch;
+    this.#initOffset();
+
+    return this.#message;
   }
 }
