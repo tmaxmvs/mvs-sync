@@ -1,38 +1,69 @@
-import WS from "jest-websocket-mock";
-import { SyncManager } from "../lib/utils/SyncManager";
-import { MessageWriter } from "../lib/utils/MessageWriter";
+import { SyncManager } from "./utils/util/SyncManager";
 
-describe("SyncManager websocket communication", () => {
-  let mockServer: WS;
+// 웹소켓 서버 URL
+const serverUrl = "ws://192.168.153.144:7788";
+
+describe("웹소켓 서버 테스트", () => {
   let syncManager: SyncManager;
 
+  const delay = (ms: number) => {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  };
+
+  const checkConnectionID = async () => {
+    return await new Promise<number>((resolve, reject) => {
+      const interval = setInterval(() => {
+        const connectionID = syncManager.getConnectionID();
+        if (connectionID !== 0) {
+          resolve(connectionID);
+          clearInterval(interval);
+        }
+      }, 60);
+    });
+  };
+
+  const checkRoomID = async () => {
+    return await new Promise<number>((resolve) => {
+      syncManager.reqRoomListInfo((res: any) => {
+        resolve(res[res.length - 1].RoomID);
+      });
+    });
+  };
+
   beforeEach(async () => {
-    mockServer = new WS("ws://localhost:7788");
-    syncManager = new SyncManager("ws://localhost:7788");
-    await mockServer.connected;
+    await delay(500);
+    syncManager = new SyncManager(serverUrl);
   });
 
-  test("getConnectionID", () => {
-    // connectionID는 private 속성이므로, 테스트를 위해 임시로 접근을 허용해야 합니다.
-    // SyncManager 클래스에 다음 코드를 추가하세요:
-    // get connectionIDForTesting() { return this.#connectionID; }
-    // 이제 테스트를 작성할 수 있습니다:
-    expect(syncManager.getConnectionID()).toBeUndefined();
-  });
-});
-
-describe("MessageWriter", () => {
-  let messageWriter: MessageWriter;
-
-  beforeEach(() => {
-    messageWriter = new MessageWriter();
+  afterEach(() => {
+    if (syncManager.socket.readyState === 1) {
+      syncManager.socket.close();
+    }
   });
 
-  test("setMessageBodyOne", () => {
-    messageWriter.setMessageBodyOne(42);
-    const expectedBuffer = Buffer.alloc(4);
-    expectedBuffer.writeUInt32LE(42);
+  test("방 생성 테스트", async () => {
+    const currentRoomID = await checkRoomID();
+
+    return new Promise<void>((resolve) => {
+      syncManager.reqCreateAndJoinRoom(9);
+
+      syncManager.onCreateRoom = (res) => {
+        expect(parseInt(res, 16)).toBeGreaterThan(currentRoomID);
+        resolve();
+      };
+    });
   });
 
-  // 다른 메소드에 대한 테스트 케이스도 여기에 추가하세요.
+  test("방 입장 테스트", async () => {
+    await checkConnectionID().then((res: Number) => {
+      return new Promise<void>((resolve) => {
+        syncManager.reqJoinRoom(1);
+
+        syncManager.onJoinRoom = (res) => {
+          expect(res).toBeGreaterThanOrEqual(1);
+          resolve();
+        };
+      });
+    });
+  });
 });
