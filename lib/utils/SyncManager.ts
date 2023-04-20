@@ -20,7 +20,6 @@ export class SyncManager extends MessageWriter {
   onOtherClientJoined: (res: OtherClientJoined) => any;
 
   /**
-   *
    * @param _url websocket url
    */
   constructor(_url: string) {
