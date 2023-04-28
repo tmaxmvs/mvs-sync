@@ -250,8 +250,8 @@ export class SyncManager extends MessageWriter {
     let roomInfo: any = new Object();
 
     while (offset < 4 + offsetBound) {
-      let roomID: number = dataView.getUint32(offset + 4, true);
-      offset += protocol.eOffsetManager.OFFSET_LENGTH + 4;
+      let roomID: number = dataView.getUint32(offset, true);
+      offset += protocol.eOffsetManager.OFFSET_LENGTH;
 
       let byteView = new Uint8Array(dataView.buffer, offset, 80);
       let charCodes = Array.from(byteView).map((byte) =>
