@@ -224,9 +224,9 @@ export class SyncManager extends MessageWriter {
       offset += protocol.eOffsetManager.OFFSET_LENGTH;
 
       tempList = {
-        RoomID: roomID,
-        RoomName: roomName,
-        PlayerNumber: playerNumber,
+        roomID,
+        roomName,
+        playerNumber,
       };
       roomList.push(tempList);
     }
@@ -248,8 +248,10 @@ export class SyncManager extends MessageWriter {
 
   #getRoomInfo(offset: number, dataView: any, offsetBound: number): number {
     let roomInfo: any = new Object();
-
     while (offset < 4 + offsetBound) {
+      if (offset + 80 + 4 > dataView.byteLength) {
+        throw new Error("현재 존재하지 않는 방에 대한 요청입니다.");
+      }
       let roomID: number = dataView.getUint32(offset, true);
       offset += protocol.eOffsetManager.OFFSET_LENGTH;
 
@@ -260,7 +262,6 @@ export class SyncManager extends MessageWriter {
       let stringChar = charCodes.join("");
       let roomName = this.#removeInvalidCharacters(stringChar);
       offset += 80;
-
       let playerNumber: number = dataView.getUint32(offset, true);
       offset += protocol.eOffsetManager.OFFSET_LENGTH;
 
