@@ -1,0 +1,58 @@
+syntax = "proto3";
+package Protocol; // Protocol이라는 namespace 이름을 지어준 것
+
+import "Enum.proto";
+
+message PlayerInfo
+{
+    uint64 playerID = 1;
+    string name = 2;
+}
+
+message RoomInfo
+{
+    uint64 appID = 1;
+    uint64 roomID = 2;
+    string name = 3;
+    repeated PlayerInfo playerInfos = 4;
+}
+
+message GroupID
+{
+    uint32 sceneNumber = 1;
+    uint32 channelID = 2;
+}
+
+message GroupInfo
+{
+    GroupID groupID = 1;
+    repeated PlayerInfo playerInfos = 2;
+}
+
+message Vector3
+{
+    double x = 1;
+    double y = 2;
+    double z = 3;
+}
+
+message Transform
+{
+    Vector3 position = 1;
+    Vector3 rotation = 2;
+    Vector3 scale = 3;
+}
+
+message ObjectID
+{
+    uint32 prefabID = 1;
+    uint32 instanceID = 2;
+}
+
+message ObjectInfo
+{
+    uint64 ownerPlayerID = 1;
+    ObjectID objectID = 2;
+    Transform transform = 3;
+    bool visible = 4;
+}

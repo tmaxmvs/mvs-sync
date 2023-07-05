@@ -1,0 +1,171 @@
+syntax = "proto3";
+package Protocol; // Protocol이라는 namespace 이름을 지어준 것
+
+import "Enum.proto";
+import "Struct.proto";
+
+// HeartBeat
+message C_HEART_BEAT
+{
+}
+
+message S_HEART_BEAT
+{
+  Result result = 2;
+}
+
+
+// Room(SAP)(WAPL) 관련 패킷, SAS 부분이 아직 완료가 안되었는데 그것을 가정하고 작동하도록 만드는 패킷, 추후에는 SuperAppProtocol로 대체될 듯 하다.
+message C_TEST_ROOM_CREATE
+{
+  uint64 appID = 1;
+  uint64 waplRoomID = 2;
+  string name = 3;
+}
+
+message S_TEST_ROOM_CREATE
+{
+  uint64 appID = 1;
+  uint64 waplRoomID = 2;
+  string name = 3;
+  Result result = 4;
+}
+
+message C_TEST_ROOM_LIST
+{
+}
+
+message S_TEST_ROOM_LIST
+{
+  repeated RoomInfo roomInfos = 1;
+  Result result = 2;
+}
+
+message C_ROOM_JOIN
+{
+  uint64 waplRoomID = 1;
+}
+
+// TODO: bool 이 아니라 Enum.proto 에 추가해서 만드는 게 나을 것 같다.
+message S_ROOM_JOIN
+{
+  Result result = 1;
+}
+
+// Group(InGame), 게임 내에서 작동하는 로직 관련 패킷
+message C_PLAYER_ID
+{
+}
+
+message S_PLAYER_ID
+{
+  uint64 playerID = 1;
+  Result result = 2;
+}
+
+// 내부적으로 그룹 바로 생성하게 변경
+//message C_GROUP_CREATE
+//{
+//  uint32 sceneNumber = 1;
+//}
+//
+//message S_GROUP_CREATE
+//{
+//  GroupID groupID = 1;
+//  Result result = 2;
+//}
+
+message C_GROUP_LIST
+{
+}
+
+message S_GROUP_LIST
+{
+  repeated GroupInfo groupInfos = 1;
+  Result result = 2;
+}
+
+message C_GROUP_JOIN
+{
+  GroupID groupID = 1;
+}
+
+message S_GROUP_JOIN
+{
+  GroupInfo groupInfo = 1;
+  Result result = 2;
+}
+
+// TODO: 지금 보니 이거 없애고, S_InitialObjects를 컨넥션 맺을 때에 1번만 내려주는 것이 나을 수도 있겠다. 차후 확인 필요.
+message C_INITIAL_OBJECTS
+{
+}
+
+message S_INITIAL_OBJECTS
+{
+  repeated ObjectInfo objectInfos = 1;
+  Result result = 2;
+}
+
+message S_OTHER_CLIENT_JOINED
+{
+  PlayerInfo playerInfo = 1;
+  GroupID groupID = 2;
+}
+
+message C_ADD_NETWORK_OBJECTS
+{
+  repeated ObjectInfo objectInfos = 1;
+}
+
+message S_ADD_NETWORK_OBJECTS
+{
+  repeated ObjectInfo objectInfos = 1;
+  Result result = 2;
+}
+
+message C_REMOVE_NETWORK_OBJECTS
+{
+  repeated ObjectInfo objectInfos = 1;
+}
+
+message S_REMOVE_NETWORK_OBJECTS
+{
+  repeated ObjectInfo objectInfos = 1;
+  Result result = 2;
+}
+
+message C_UPDATE_NETWORK_OBJECTS
+{
+  repeated ObjectInfo objectInfos = 1;
+}
+
+message S_UPDATE_NETWORK_OBJECTS
+{
+  repeated ObjectInfo objectInfos = 1;
+  Result result = 2;
+}
+
+message C_CHANGE_OBJECTS_OWNER
+{
+  repeated ObjectInfo objectInfos = 1;
+  uint64 newOwnerPlayerID = 2;
+}
+
+message S_CHANGE_OBJECTS_OWNER
+{
+  repeated ObjectInfo objectInfos = 1;
+  Result result = 2;
+}
+
+message C_CHAT
+{
+  string msg = 1;
+}
+
+message S_CHAT
+{
+  PlayerInfo playerInfo = 1;
+  string msg = 2;
+  Result result = 3;
+}
