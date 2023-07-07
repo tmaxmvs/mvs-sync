@@ -2,7 +2,6 @@ import {MessageId} from "../interfaces/MessageId"
 import {PacketFactory} from "./factory/PacketFactory";
 import {PacketReceiver} from "./packetHandler/PacketReciever";
 import {Buffer} from "buffer";
-import WebSocket from "ws";
 const pb = require("./protoBuf/Protocol_pb");
 
 export class SyncManager {
