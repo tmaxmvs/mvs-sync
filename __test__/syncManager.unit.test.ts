@@ -1,69 +1,90 @@
-// import { SyncManager } from "./utils/util/SyncManager";
-//
-// // 웹소켓 서버 URL
-// const serverUrl = "ws://192.168.153.144:7788";
-//
-// describe("웹소켓 서버 테스트", () => {
-//   let syncManager: SyncManager;
-//
-//   const delay = (ms: number) => {
-//     return new Promise((resolve) => setTimeout(resolve, ms));
-//   };
-//
-//   const checkConnectionID = async () => {
-//     return await new Promise<number>((resolve, reject) => {
-//       const interval = setInterval(() => {
-//         const connectionID = syncManager.getConnectionID();
-//         if (connectionID !== 0) {
-//           resolve(connectionID);
-//           clearInterval(interval);
-//         }
-//       }, 60);
-//     });
-//   };
-//
-//   const checkRoomID = async () => {
-//     return await new Promise<number>((resolve) => {
-//       syncManager.reqRoomListInfo((res: any) => {
-//         resolve(res[res.length - 1].RoomID);
-//       });
-//     });
-//   };
-//
-//   beforeEach(async () => {
-//     await delay(500);
-//     syncManager = new SyncManager(serverUrl);
-//   });
-//
-//   afterEach(() => {
-//     if (syncManager.socket.readyState === 1) {
-//       syncManager.socket.close();
-//     }
-//   });
-//
-//   test("방 생성 테스트", async () => {
-//     const currentRoomID = await checkRoomID();
-//
-//     return new Promise<void>((resolve) => {
-//       syncManager.reqCreateAndJoinRoom(9);
-//
-//       syncManager.onCreateRoom = (res) => {
-//         expect(parseInt(res, 16)).toBeGreaterThan(currentRoomID);
-//         resolve();
-//       };
-//     });
-//   });
-//
-//   test("방 입장 테스트", async () => {
-//     await checkConnectionID().then((res: Number) => {
-//       return new Promise<void>((resolve) => {
-//         syncManager.reqJoinRoom(1);
-//
-//         syncManager.onJoinRoom = (res) => {
-//           expect(res).toBeGreaterThanOrEqual(1);
-//           resolve();
-//         };
-//       });
-//     });
-//   });
-// });
+import {SyncManager} from "../lib/utils/SyncManager";
+import {ResultMessage} from "../lib/interfaces/ResultMessage";
+import {randomUUID} from "crypto";
+import syncManager from "../lib/utils/socket";
+
+describe("SyncManager 동기화 테스트", () => {
+
+  const appId = 1
+  const roomNumber = parseInt(randomUUID(), 16) >>> 1
+  const roomName = 'test'
+  const delay = (ms: number) => {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  };
+
+  beforeEach(async () => {
+    await delay(500);
+  });
+
+  afterEach(() => {
+    if (SyncManager.socket.readyState === 1) {
+      SyncManager.socket.close();
+    }
+  });
+
+  test("HEART_BEAT", async () => {
+    SyncManager.socket.onopen = () => {
+      syncManager.reqHeatBeat();
+      return new Promise<void>((resolve) => {
+
+        syncManager.onHeartBeat = (message) => {
+          expect(message.getResult()).toBe(ResultMessage.SUCCESS);
+          resolve();
+        };
+      })
+    }
+  });
+
+  test("룸 리스트 테스트", async () => {
+    SyncManager.socket.onopen = () => {
+      syncManager.reqRoomList();
+      return new Promise<void>((resolve) => {
+        syncManager.onRoomList = (message) => {
+          expect(message.getResult()).toBe(ResultMessage.SUCCESS);
+          resolve();
+        };
+      });
+    }
+  });
+
+  test("룸 생성 테스트", async () => {
+    SyncManager.socket.onopen = () => {
+      syncManager.reqCreateRoom(appId, roomNumber, roomName);
+      return new Promise<void>((resolve) => {
+        syncManager.onRoomList = (message) => {
+          expect(message.getResult()).toBe(ResultMessage.SUCCESS);
+          expect(message.getAppid()==appId
+              &&message.getWaplroomid()==roomNumber
+              &&message.getName()==roomName)
+              .toBe(true)
+          resolve();
+        };
+      });
+    }
+  });
+
+  test("그룹 리스트 테스트", async () => {
+    SyncManager.socket.onopen = () => {
+      syncManager.reqGroupList();
+      return new Promise<void>((resolve) => {
+        syncManager.onGroupList = (message) => {
+          expect(message.getResult()).toBe(ResultMessage.SUCCESS);
+          resolve();
+        };
+      });
+    }
+  });
+
+  test("플레이어 아이디 테스트", async () => {
+    SyncManager.socket.onopen = () => {
+      syncManager.reqPlayerId();
+      return new Promise<void>((resolve) => {
+        syncManager.onPlayerId = (message) => {
+          expect(message.getResult()).toBe(ResultMessage.SUCCESS);
+          expect(message.getPlayerid()).toBeGreaterThanOrEqual(0);
+          resolve();
+        };
+      });
+    }
+  });
+});

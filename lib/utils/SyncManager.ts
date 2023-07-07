@@ -2,13 +2,14 @@ import {MessageId} from "../interfaces/MessageId"
 import {PacketFactory} from "./factory/PacketFactory";
 import {PacketReceiver} from "./packetHandler/PacketReciever";
 import {Buffer} from "buffer";
+import WebSocket from "ws";
 const pb = require("./protoBuf/Protocol_pb");
 
 export class SyncManager {
-    static socket: WebSocket = new WebSocket(process.env.REACT_APP_SERVER_URL);
-
+    // static socket: WebSocket = new WebSocket(process.env.REACT_APP_SERVER_URL)
+    static socket: WebSocket = new WebSocket('ws://mvs-server.kro.kr:30080/')
+    static syncManager: SyncManager = new SyncManager()
     #connectionID: number = 0;
-    initialized: boolean = false;
 
     /**
      * @brief 각 컴포넌트에서 재정의 할 리스너
@@ -30,22 +31,19 @@ export class SyncManager {
     onChat:(e:any) => any
 
     /**
-     * @param _url websocket url
+     * @brief protected constructor
      */
-    constructor(_url: string) {
-        this.#initialize(_url).then(() => {
-            this.initialized = true;
-        });
+    protected constructor() {
+        this.#initialize().then(() => SyncManager.syncManager = this);
     }
 
+    static getInstance() {
+        return SyncManager.syncManager
+    }
     /**
      * @brief 서버로 웹소켓 연결 및 listening
-     * @param _url websocket url
      */
-    async #initialize(_url: string) {
-        if (!SyncManager.socket) {
-            SyncManager.socket = new WebSocket(_url);
-        }
+    async #initialize() {
         SyncManager.socket.binaryType = "arraybuffer";
         this.#subscribe();
 

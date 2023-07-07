@@ -1,5 +1,6 @@
 import {HeaderOffsetManager} from "../../interfaces/OffsetLength";
 import {MessageId} from "../../interfaces/MessageId";
+import {Buffer} from "buffer";
 
 type Packet = {
     messageId:MessageId,
@@ -14,6 +15,7 @@ export class PacketReceiver {
         let packetList = []
         let bufferData = data
         while(bufferData.byteLength>0){
+            // @ts-ignore
             const dataView = new DataView(bufferData);
             const messageId = dataView.getInt16(HeaderOffsetManager.MESSAGE_ID_OFFSET, true);
             const packetSize = dataView.getInt16(HeaderOffsetManager.LENGTH_OFFSET, true)

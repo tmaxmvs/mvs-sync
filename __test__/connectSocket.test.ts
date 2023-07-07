@@ -1,26 +1,18 @@
-// import WebSocket from "ws";
-// import { SyncManager } from "./utils/util/SyncManager";
-//
-// // 웹소켓 서버 URL
-// const serverUrl = "ws://192.168.153.146:30080/";
-//
-// describe("웹소켓 서버 테스트", () => {
-//   let syncManager: SyncManager;
-//
-//   beforeEach(() => {
-//     syncManager = new SyncManager(serverUrl);
-//   });
-//
-//   afterEach(() => {
-//     if (syncManager.socket.readyState === 1) {
-//       syncManager.socket.close();
-//     }
-//   });
-//
-//   test("서버에 연결할 수 있는지 확인", (done) => {
-//     syncManager.socket.onopen = () => {
-//       expect(syncManager.socket.readyState).toBe(WebSocket.OPEN);
-//       done();
-//     };
-//   });
-// });
+import {SyncManager} from "../lib/utils/SyncManager";
+const WebSocket = require ("ws");
+
+describe("웹소켓 서버 테스트", () => {
+
+  afterEach(() => {
+    if (SyncManager.socket.readyState === 1) {
+      SyncManager.socket.close();
+    }
+  });
+
+  test("서버에 연결할 수 있는지 확인", (done) => {
+    SyncManager.socket.onopen = () => {
+      expect(SyncManager.socket.readyState).toBe(WebSocket.OPEN);
+      done();
+    };
+  });
+});
