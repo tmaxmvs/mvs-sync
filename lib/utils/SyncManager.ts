@@ -5,8 +5,7 @@ import {Buffer} from "buffer";
 const pb = require("./protoBuf/Protocol_pb");
 
 export class SyncManager {
-    // static socket: WebSocket = new WebSocket(process.env.REACT_APP_SERVER_URL)
-    static socket: WebSocket = new WebSocket('ws://mvs-server.kro.kr:30080/')
+    static socket: WebSocket = new WebSocket(process.env.REACT_APP_SERVER_URL)
     static syncManager: SyncManager = new SyncManager()
     #connectionID: number = 0;
 
